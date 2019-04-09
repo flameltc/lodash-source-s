@@ -1,4 +1,5 @@
 var flameltc = {
+  isFloat: num => num % 2 !== 0,
   chunk: function (array, num) {
     let arr = [],
       k = 0
@@ -40,21 +41,37 @@ var flameltc = {
       ))
   },
 
-  differenceBy: function (ary, ...args) {
-
+  differenceBy: function (array, ...values) {
+    var f = flameltc.identity
+    if (typeof values[values.length - 1] !== 'object'){
+      f = flameltc.iteratee(values.pop())
+    }
+    var differBy = values.reduce((acc, arr) => {
+      acc.push(arr.map(x => f(x)))
+      return acc
+    }, [])
+    return array.filter(item => !differBy.some(arr => arr.includes(f(item))))
   },
 
   drop: ((array, val = 1) => {
-    if (val >= array.length) {
-      return []
-    } else {
-      return array.slice(val, array.length)
-    }
+    return val > array.length ? [] : array.slice(val, array.length)
   }),
 
   dropRight: ((array, val = 1) => {
     return array.length <= val ? [] : array.slice(0, array.length - val)
   }),
+
+  dropRightWhile: function (array, predicate = flameltc.identity) {
+    var f = flameltc.iteratee(predicate)
+    var index = -1
+    for (var i = array.length - 1; i >= 0; i--){
+      if (!f(array[i])) {
+        index = i
+        break
+      }
+    }
+    return array.slice(0, index + 1)
+  },
 
   fill: ((array, value, start = 0, end = array.length) => {
     for (let i = start; i < end; i++) {
@@ -126,11 +143,10 @@ var flameltc = {
   },
 
   initial: function (array) {
-    array.pop()
-    return array
+    return array.slice(0, array.length - 1)
   },
 
-  intersection: function (...array) {
+  intersection: function (...arrays) {
     return arguments[0].reduce((result, it) => {
       var count = 1
       for (var i = 1; i < arguments.length; i++) {
@@ -138,7 +154,7 @@ var flameltc = {
           count++
         }
       }
-      if (count == arguments.length) {
+      if (count === arguments.length) {
         result.push(it)
       }
       return result
@@ -158,7 +174,14 @@ var flameltc = {
   },
 
   intersectionBy: function (...args) {
-    var predicate = flameltc.iteratee(args.pop())
+    var iteratee = flameltc.identity
+    //isArray
+    if (Object.prototype.toString.call(args[args.length - 1]) !== '[object Array]') {
+      iteratee = args.pop()
+    }
+    var f = flameltc.iteratee(iteratee)
+
+    return args.reduce((acc, cur) => acc.filter(item => cur.map(x => f(x)).indexOf(f(item)) !== -1))
   },
 
   join: function (array, separator = ',') {
@@ -232,15 +255,8 @@ var flameltc = {
 
   },
 
-  pull: function (array, ...value) {
-    value.forEach(item => {
-      array.map((it, idx) => {
-        if (item == it) {
-          array.splice(idx, 1)
-        }
-      })
-    })
-    return array
+  pull: function (array, ...values) {
+    return flameltc.pullAllBy(array, values)
   },
 
   pullAll: function (array, values) {
@@ -256,6 +272,11 @@ var flameltc = {
       })
     })
     return array
+  },
+
+  pullAllBy: (array, values, iteratee = flameltc.identity) => {
+    iteratee = flameltc.iteratee(iteratee)
+    return values.reduce((acc, cur) => acc.filter(item => iteratee(item) !== iteratee(cur)), array)
   },
 
   pullAt: (array, indexes) => {
@@ -433,14 +454,44 @@ var flameltc = {
     return mid
   },
 
-  uniq: function (array) {
-    var result = []
-    for (var it of array) {
-      if (!result.includes(it)) {
-        result.push(it)
-      }
+  sortedIndexBy: (array, value, iteratee = flameltc.identity) => {
+    iteratee = flameltc.iteratee(iteratee)
+    array = array.map(item => iteratee(item))
+    value = iteratee(value)
+    let left = 0
+    let right = array.length
+    let mid = Math.floor((left + right) / 2)
+
+    while (right - left > 1) {
+      if (array[mid] >= value) right = mid
+      else left = mid
+      mid = Math.floor((left + right) / 2)
     }
-    return result
+
+    if (array[mid] < value) mid++
+    return mid
+  },
+
+  sortedLastIndexBy: (array, value, iteratee = flameltc.identity) => {
+    iteratee = flameltc.iteratee(iteratee)
+    array = array.map(item => iteratee(item))
+    value = iteratee(value)
+    let left = 0
+    let right = array.length
+    let mid = Math.floor((left + right) / 2)
+
+    while (right - left > 1) {
+      if (array[mid] <= value) left = mid
+      else right = mid
+      mid = Math.floor((left + right) / 2)
+    }
+
+    if (array[mid] <= value) mid++
+    return mid
+  },
+
+  uniq: function (array) {
+    return Array.from(new Set(array))
   },
 
   uniqWith: function (array, comp) {
@@ -453,6 +504,19 @@ var flameltc = {
       res.push(item)
       return res
     }, [])
+  },
+
+  uniqBy: function (array, iteratee = flameltc.identity) {
+    let iteratee = flameltc.iteratee(iteratee)
+    let set = new Set()
+
+    return array.filter(item => {
+      let el = iteratee(item)
+      if (!set.has(el)) {
+        set.add(el)
+        return true
+      } else return false
+    })
   },
 
   sortedUniq: function (array) {
@@ -491,11 +555,27 @@ var flameltc = {
     return array.slice(0, n)
   },
 
+  takeWhile: (array, predicate = flameltc.identity) => {
+    predicate = flameltc.iteratee(predicate)
+    for (var i = 0; i < array.length; i++) {
+      if(!predicate(array[i])) return flameltc.take(array, i)
+    }
+    return []
+  },
+
   takeRight: function (array, n = 1) {
     if (n >= array.length) {
       n = array.length
     }
     return array.slice(array.length - n, array.length)
+  },
+
+  takeRightWhile: (array, predicate = flameltc.identity) => {
+    predicate = flameltc.iteratee(predicate)
+    for (let i = array.length - 1; i >= 0; i--) {
+      if(!predicate(array[i])) return flameltc.takeRight(array, array.length - 1 - i)
+    }
+    return []
   },
 
   union: function (...ary) {
@@ -504,9 +584,14 @@ var flameltc = {
     return this.uniq(result)
   },
 
+  unionBy: (...arrays) => {
+    let iteratee = arrays.pop()
+    return flameltc.uniqBy([].concat(...arrays), iteratee)
+  },
+
   unionWith: function (array1, array2, comp) {
     array = array1.concat(array2)
-    return this.uniqWith(array, comp)
+    return flameltc.uniqWith(array, comp)
   },
 
   zip: function (...array) {
@@ -521,8 +606,35 @@ var flameltc = {
     return obj
   },
 
-  zipObjectDeep: function (props = [], value = []) {
+  zipObjectDeep: function (props = [], values = []) {
+    let res = {}
 
+    props.forEach((item, index) => {
+      let paths = item.split('.')
+      helper(paths, 0, res, values[index])
+    })
+    return res
+
+    function helper(paths, index, obj, val) {
+      let path = paths[index]
+
+      // 终止条件
+      if (index === paths.length - 1) return obj[path] = val
+      
+      // 处理数组/对象情况
+      if (path.indexOf('[') !== -1) {
+        var left = path.indexOf('[')
+        var right = path.indexOf(']')
+        var i = path.slice(right - 1, right)
+        path = path.slice(0, left)
+        if (!obj[path]) obj[path] = []
+        obj[path][i] = {}
+        return helper(paths, index + 1, obj[path][i], val)
+      } else {
+        if (!obj[path]) obj[path] = {}
+        return helper(paths, index + 1, obj[path], val)
+      }
+    }
   },
 
   zipWith: function (...args) {
@@ -599,7 +711,16 @@ var flameltc = {
   },
 
   xorWith: function (...args) {
-
+    let comparator = args.pop()
+    let arr = [].concat(...args)
+    let res = []
+    for (let i = 0; i < arr.length; i++){
+      let tag = false
+      for (var j = 0; j < arr.length; j++){
+        if(i !== j && comparator(arr[i], arr[j])) tag = true
+      }
+      if(!tag) res.push(arr[i])
+    }
   },
 
   concat: function (array, ...values) {
@@ -656,6 +777,28 @@ var flameltc = {
         return result
       }, [])
     }
+  },
+
+  reduce: function (collection, iteratee = flameltc.identity, accumulator) {
+    collection = Object.entries(collection)
+    acc = collection[0][1]
+    let f = flameltc.iteratee(iteratee)
+    let i = 1
+    if (accumulator !== undefined) {
+      acc = accumulator
+      i = 0
+    }
+    for (; i < collection.length; i++){
+      acc = f(acc, collection[i][1], collection[i][0])
+    }
+    return acc
+  },
+
+  sample: function (collection) {
+    let arr = Object.entries(collection)
+    let ran = arr[~~(Math.random() * arr.length)]
+    if (flameltc.isArray(collection)) return ran[0]
+    else return {[ran[0]]: ran[1]}
   },
 
   find: function (col, predicate = this.identity, fromIndex = 0) {
@@ -715,6 +858,8 @@ var flameltc = {
       return false
     }
   },
+
+
 
   add: (augend, addend) => augend + addend,
 
@@ -802,9 +947,116 @@ var flameltc = {
     return number
   },
 
+  eq: (value, other) => {
+    value === other || (value !== value && other !== other)
+  },
+
+  isArguments: function (value) {
+    return Object.prototype.toString.call(value) === '[object Arguments]'
+  },
+
   isArray: function (value) {
     return Object.prototype.toString.call(value) === "[object Array]"
   },
+
+  isArrayBuffer: function (value) {
+    return Object.prototype.toString.call(value) === '[object ArrayBuffer]'
+  },
+
+  isArrayLike: function (value) {
+    return !flameltc.isNil(value) && value.hasOwnProperty('length') && typeof value !== 'function'
+  },
+
+  isBoolean: function (value) {
+    return Object.prototype.toString.call(value) === '[object Boolean]'
+  },
+
+  isDate: value => {
+    return Object.prototype.toString.call(value) === '[object Date]'
+  },
+
+  isElement: value => {
+    return value !== null && typeof value === 'object' && value.nodeType === 1
+  },
+
+  isNumber: function (value) {
+    return Object.prototype.toString.call(value) === '[object Number]'
+  },
+
+  isEmpty: function (value) {
+    return flameltc.isNil(value) || Object.values(value).length === 0
+  },
+
+  isError: function (value) {
+    return value instanceof Error === true
+  },
+
+  isObject: value => {
+    return value !== null && typeof value === 'object' || typeof value === 'function'
+  },
+
+  isRegExp: function (value) {
+    return Object.prototype.toString.call(value) === '[object RegExp]'
+  },
+
+  isSet: function (value) {
+    return Object.prototype.toString.call(value) === '[object Set]'
+  },
+
+  isString: function (value) {
+    return Object.prototype.toString.call(value) === '[object String]'
+  },
+
+  isWeakMap: function (value) {
+    return Object.prototype.toString.call(value) === '[object WeakMap]'
+  },
+
+  isWeakSet: function (value) {
+    return Object.prototype.toString.call(value) === '[object WeakSet]'
+  },
+
+  isNative: value => value.toString().includes('[native code]'),
+
+  isSymbol: function (value) {
+    return typeof value === 'symbol'
+  },
+
+  isUndefined: function (value) {
+    return typeof value === 'undefined'
+  },
+
+
+  isFinite: function (value) {
+    return Number.isFinite(value)
+  },
+
+  isEqual: function (value, other) {
+    if (value === other) return true
+    if (value !== value && other !== other) return true
+    if (Object.prototype.toString.call(value) !== Object.prototype.toString.call(other)) return false
+    
+    if (flameltc.isObject(value)) {
+      let val = Object.keys(value)
+      let oth = Object.keys(other)
+
+      if (val.length !== oth.length) return false
+      for (let key of val) {
+        if(!flameltc.isEqual(value[key], other[key])) return false
+      }
+      return true
+    }
+    return false
+  },
+
+  isFunction: value => {
+    return typeof value === 'function'
+  },
+
+  ifNil: value => {
+    return value === null || value === undefined
+  },
+  
+  
 
   inRange: function (number, start = 0, end) {
     if ((number > start && number < end) || (number < start && number > end)) {
@@ -830,17 +1082,23 @@ var flameltc = {
   },
 
   iteratee: function (iter) {
-    if (typeof (iter) == 'function') {
+    if (typeof (iter) === 'function') {
       return iter
     }
-    if (typeof (iter) == 'string') {
+    if (typeof (iter) === 'string') {
       return flameltc.property(iter)
     }
-    if (typeof (iter) == 'object') {
+    if (Object.prototype.toString.call(iter) === '[object Object]'){
       return flameltc.matches(iter)
     }
     if (flameltc.isArray(iter)) {
-      //
+      // !!! 只写了数组 length === 2 的情况
+      return obj => flameltc.isEqual(obj[iter[0]], iter[1])
+    }
+    // isRegExp
+    // /(?<=\/).*?(?=\/)/
+    if (flameltc.isRegExp(iter)) {
+      return str => iter.exec(str)
     }
   },
 
@@ -849,47 +1107,4 @@ var flameltc = {
       return obj[propName]
     }
   },
-
-
-
 }
-
-function duplicate(n) {
-  return [n, n];
-}
-var isE = (x, y) => x == y
-var add = (x, y) => x + y
-console.log(add(1, 2))
-var users = [{
-    'user': 'barney',
-    'age': 36,
-    'active': true
-  },
-  {
-    'user': 'fred',
-    'age': 40,
-    'active': false
-  },
-  {
-    'user': 'pebbles',
-    'age': 1,
-    'active': true
-  }
-];
-var array = [1];
-var other = flameltc.concat(array, 2, [3], [
-  [4]
-]);
-var objects = [{
-  'n': 4
-}, {
-  'n': 2
-}, {
-  'n': 8
-}, {
-  'n': 6
-}];
-console.log(flameltc.forEach([1, 2], function (value) {
-  console.log(value);
-}))
-console.log(flameltc.inRange(-3, -2, -6));
