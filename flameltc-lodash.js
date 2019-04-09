@@ -1065,7 +1065,58 @@ var flameltc = {
     return false
   },
 
+  cloneDeep: value => {
+    if (value === null || typeof value !== 'object') return value
+    
+    let ctor = value.constructor
+    let obj
 
+    switch (ctor) {
+      case RegExp:
+        obj = new ctor(value)
+        break
+      default:
+        obj = new ctor()
+    }
+
+    for (let key in value) {
+      if (value.hasOwnProperty(key)) {
+        obj[key] = flameltc.cloneDeep(value[key])
+      }
+    }
+  },
+
+  /**
+   * @param  {Function} func
+   * @param  {Function} resolver
+   * @return {Function}
+   */
+  memoize: (func, resolver = (...args) => args[0]) => {
+    var memo = function (...args) {
+      var cache = memo.cache
+      var key = resolver(...args)
+      if (cache.has(key)) return cache.get(key)
+      else cache.set(key, func(...args))
+    }
+
+    memo.cache = new Map()
+    return memo
+  },
+
+  /**
+   * @param  {Function} func
+   * @param  {number} [arity=func.length]
+   * @return {Function}
+   */
+  curry: (func, arity = func.length) => {
+    return function curried(...args) {
+      if (args.length < arity) {
+        return curried.bind(null, ...args)
+      } else {
+        return func(...args)
+      }
+    }
+  },
 
   identity: function (value) {
     return value
