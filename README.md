@@ -67,3 +67,38 @@ function apply(func, context, args) {
 
   通过iteratee函数, 将传入的参数处理成一个函数,这使得我们在使用lodash的一些高阶函数时,传入的值并不局限于函数,传入的值会被iteratee进行处理,返回需要的函数.
 
+* debounce 函数, 接收一个 immediate 参数, 函数是否在初始时刻调用
+
+  ```js
+   debounce: function(func, wait, immediate) {
+      let timeoutID = null
+      let result
+      let later = function (context, ...args) {
+        timeoutID = null
+        result = func.call(context, ...args)
+      }
+      let debounceFunc = function (...args) {
+        if (timeoutID) clearTimeout(timeoutID)
+        if (immediate) {
+          let callNow = !timeoutID
+          timeoutID = setTimeout(() => {
+            later(this, ...args)
+          }, wait)
+          if (callNow) result = func.call(this, ...args)
+        } else {
+          timeoutID = setTimeout(() => {
+            later(this, ...args)
+          }, wait);
+        }
+        return result
+      }
+      debounceFunc.cancel = function () {
+        clearTimeout(timeoutID)
+        timeoutID = null
+      }
+      return debounceFunc
+    }
+  ```
+
+  
+

@@ -1118,6 +1118,35 @@ var flameltc = {
     }
   },
 
+  debounce: function(func, wait, immediate) {
+    let timeoutID = null
+    let result
+    let later = function (context, ...args) {
+      timeoutID = null
+      result = func.call(context, ...args)
+    }
+    let debounceFunc = function (...args) {
+      if (timeoutID) clearTimeout(timeoutID)
+      if (immediate) {
+        let callNow = !timeoutID
+        timeoutID = setTimeout(() => {
+          later(this, ...args)
+        }, wait)
+        if (callNow) result = func.call(this, ...args)
+      } else {
+        timeoutID = setTimeout(() => {
+          later(this, ...args)
+        }, wait);
+      }
+      return result
+    }
+    debounceFunc.cancel = function () {
+      clearTimeout(timeoutID)
+      timeoutID = null
+    }
+    return debounceFunc
+  },
+
   identity: function (value) {
     return value
   },
